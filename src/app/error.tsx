@@ -1,0 +1,2 @@
+"use client";
+export default function ErrorPage({reset}:{error:Error&{digest?:string};reset:()=>void}){return <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4"><div className="max-w-lg rounded-2xl border border-red-200 bg-white p-8 text-center shadow-sm"><h1 className="text-2xl font-black">Something went wrong</h1><p className="mt-3 text-slate-600">The page could not be loaded. Please try again.</p><button onClick={reset} className="mt-6 min-h-11 rounded-lg bg-red-600 px-5 font-bold text-white">Try again</button></div></main>}

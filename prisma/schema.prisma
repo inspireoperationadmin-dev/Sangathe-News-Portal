@@ -1,0 +1,320 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Locale {
+  ta
+  en
+  si
+}
+enum Role {
+  ADMIN
+  EDITOR
+  SUB_EDITOR
+  REPORTER
+}
+enum ArticleStatus {
+  DRAFT
+  SUBMITTED_FOR_REVIEW
+  SUBMITTED_FOR_APPROVAL
+  EDITING
+  RETURNED
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  UPDATED
+  CORRECTED
+  ARCHIVED
+}
+enum AuditAction {
+  CREATED
+  EDITED
+  STATUS_CHANGED
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  UPDATED
+  CORRECTED
+  ARCHIVED
+  BREAKING_CHANGED
+  CATEGORY_CHANGED
+  HOMEPAGE_CHANGED
+  MEDIA_CHANGED
+  PAGE_CHANGED
+  NOTIFICATION_SENT
+  USER_CREATED
+  USER_UPDATED
+  PASSWORD_CHANGED
+  TWO_FACTOR_ENABLED
+  TWO_FACTOR_DISABLED
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  AUDIO
+}
+
+model User {
+  id String @id @default(uuid())
+  name String
+  email String @unique
+  password String
+  role Role @default(REPORTER)
+  isActive Boolean @default(true)
+  avatar String?
+  bio String?
+  twoFactorSecret String?
+  twoFactorEnabled Boolean @default(false)
+  failedLoginCount Int @default(0)
+  lockedUntil DateTime?
+  passwordChangedAt DateTime @default(now())
+  articles Article[] @relation("ArticleAuthor")
+  editedArticles Article[] @relation("ArticleLastEditor")
+  approvedArticles Article[] @relation("ArticleApprover")
+  publishedArticles Article[] @relation("ArticlePublisher")
+  revisions ArticleRevision[]
+  auditEvents AuditEvent[]
+  mediaAssets MediaAsset[]
+  updatedSitePages SitePage[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([role, isActive])
+  @@map("users")
+}
+
+model Category {
+  id String @id @default(uuid())
+  name String
+  slug String
+  locale Locale @default(ta)
+  description String?
+  order Int @default(0)
+  showOnHomepage Boolean @default(false)
+  homepageOrder Int?
+  parentId String?
+  parent Category? @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  articles Article[]
+  createdAt DateTime @default(now())
+  @@unique([slug, locale])
+  @@index([parentId, order])
+  @@index([showOnHomepage, homepageOrder])
+  @@map("categories")
+}
+
+model Article {
+  id String @id @default(uuid())
+  title String
+  slug String
+  locale Locale @default(ta)
+  translationGroupId String? @default(uuid())
+  summary String? @db.Text
+  content String @db.Text
+  featuredImage String?
+  featuredImageKey String?
+  imageCaption String?
+  status ArticleStatus @default(DRAFT)
+  isBreaking Boolean @default(false)
+  isDeveloping Boolean @default(false)
+  isExclusive Boolean @default(false)
+  breakingExpiresAt DateTime?
+  isHomepageLead Boolean @default(false)
+  homepageOrder Int?
+  seoTitle String?
+  seoDescription String?
+  correctionNote String? @db.Text
+  editorialNote String? @db.Text
+  location String?
+  people String?
+  videoUrl String?
+  audioUrl String?
+  viewCount Int @default(0)
+  authorId String
+  author User @relation("ArticleAuthor", fields: [authorId], references: [id])
+  lastEditedById String?
+  lastEditedBy User? @relation("ArticleLastEditor", fields: [lastEditedById], references: [id])
+  approvedById String?
+  approvedBy User? @relation("ArticleApprover", fields: [approvedById], references: [id])
+  publishedById String?
+  publishedBy User? @relation("ArticlePublisher", fields: [publishedById], references: [id])
+  categoryId String
+  category Category @relation(fields: [categoryId], references: [id])
+  scheduledAt DateTime?
+  approvedAt DateTime?
+  publishedAt DateTime?
+  revisions ArticleRevision[]
+  auditEvents AuditEvent[]
+  tags ArticleTag[]
+  media ArticleMedia[]
+  relatedFrom ArticleRelation[] @relation("RelatedFrom")
+  relatedTo ArticleRelation[] @relation("RelatedTo")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([slug, locale])
+  @@index([translationGroupId])
+  @@index([status, publishedAt])
+  @@index([authorId, status])
+  @@index([scheduledAt])
+  @@index([isHomepageLead])
+  @@index([homepageOrder])
+  @@map("articles")
+}
+
+model Tag {
+  id String @id @default(uuid())
+  name String
+  slug String
+  locale Locale @default(ta)
+  articles ArticleTag[]
+  createdAt DateTime @default(now())
+  @@unique([slug, locale])
+  @@index([name, locale])
+  @@map("tags")
+}
+
+model ArticleTag {
+  articleId String
+  tagId String
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tag Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  @@id([articleId, tagId])
+  @@index([tagId, articleId])
+  @@map("article_tags")
+}
+
+model MediaAsset {
+  id String @id @default(uuid())
+  url String
+  type MediaType
+  title String?
+  caption String?
+  altText String?
+  mimeType String?
+  fileSize Int?
+  storageProvider String @default("LOCAL")
+  storageKey String?
+  uploadedById String
+  uploadedBy User @relation(fields: [uploadedById], references: [id])
+  articles ArticleMedia[]
+  createdAt DateTime @default(now())
+  @@index([type, createdAt])
+  @@index([storageProvider, createdAt])
+  @@map("media_assets")
+}
+
+model ArticleMedia {
+  articleId String
+  mediaId String
+  order Int @default(0)
+  caption String?
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  media MediaAsset @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  @@id([articleId, mediaId])
+  @@index([articleId, order])
+  @@map("article_media")
+}
+
+model ArticleRelation {
+  articleId String
+  relatedArticleId String
+  order Int @default(0)
+  article Article @relation("RelatedFrom", fields: [articleId], references: [id], onDelete: Cascade)
+  relatedArticle Article @relation("RelatedTo", fields: [relatedArticleId], references: [id], onDelete: Cascade)
+  @@id([articleId, relatedArticleId])
+  @@index([articleId, order])
+  @@map("article_relations")
+}
+
+model NewsletterSubscriber {
+  id String @id @default(uuid())
+  email String @unique
+  isActive Boolean @default(true)
+  subscribedAt DateTime @default(now())
+  unsubscribedAt DateTime?
+  @@index([isActive, subscribedAt])
+  @@map("newsletter_subscribers")
+}
+
+model PushSubscription {
+  id String @id @default(uuid())
+  endpoint String @unique @db.Text
+  p256dh String
+  auth String
+  userAgent String?
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([isActive, createdAt])
+  @@map("push_subscriptions")
+}
+
+model SitePage {
+  id String @id @default(uuid())
+  slug String @unique
+  title String
+  content String @db.Text
+  isPublished Boolean @default(true)
+  updatedById String?
+  updatedBy User? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([isPublished, slug])
+  @@map("site_pages")
+}
+
+model ArticleRevision {
+  id String @id @default(uuid())
+  articleId String
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  revisionNumber Int
+  title String
+  summary String? @db.Text
+  content String @db.Text
+  status ArticleStatus
+  editorId String
+  editor User @relation(fields: [editorId], references: [id])
+  changeNote String? @db.Text
+  createdAt DateTime @default(now())
+  @@unique([articleId, revisionNumber])
+  @@index([articleId, createdAt])
+  @@map("article_revisions")
+}
+
+model AuditEvent {
+  id String @id @default(uuid())
+  action AuditAction
+  details String? @db.Text
+  actorId String?
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  articleId String?
+  article Article? @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  ipAddress String?
+  createdAt DateTime @default(now())
+  @@index([articleId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_events")
+}
+
+model SchedulerRun {
+  id                   String   @id @default(uuid())
+  trigger              String
+  status               String
+  publishedCount       Int      @default(0)
+  expiredBreakingCount Int      @default(0)
+  error                 String?  @db.Text
+  startedAt             DateTime @default(now())
+  completedAt           DateTime?
+
+  @@index([startedAt])
+  @@index([status, startedAt])
+  @@map("scheduler_runs")
+}

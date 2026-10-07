@@ -24,3 +24,32 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.newsroom-editor .tiptap > * + * { margin-top: 1rem; }
+.newsroom-editor .tiptap p { line-height: 1.9; }
+.newsroom-editor .tiptap h2,
+.article-content h2 { margin-top: 2rem; font-size: 1.5rem; font-weight: 800; line-height: 1.35; }
+.newsroom-editor .tiptap h3,
+.article-content h3 { margin-top: 1.5rem; font-size: 1.25rem; font-weight: 800; line-height: 1.4; }
+.newsroom-editor .tiptap ul,
+.article-content ul { list-style: disc; padding-left: 1.5rem; }
+.newsroom-editor .tiptap ol,
+.article-content ol { list-style: decimal; padding-left: 1.5rem; }
+.newsroom-editor .tiptap blockquote,
+.article-content blockquote { border-left: 4px solid #2563eb; margin: 1.5rem 0; padding: .75rem 1rem; background: #eff6ff; color: #334155; }
+.newsroom-editor .tiptap a,
+.article-content a { color: #1d4ed8; text-decoration: underline; text-underline-offset: 3px; }
+.newsroom-editor .tiptap img,
+.article-content img { display: block; max-width: 100%; height: auto; margin: 1.5rem auto; border-radius: .75rem; }
+.newsroom-editor .tiptap iframe,
+.article-content iframe { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; height: auto; margin: 1.5rem auto; border: 0; border-radius: .75rem; }
+.newsroom-editor .tiptap hr,
+.article-content hr { margin: 2rem 0; border: 0; border-top: 1px solid #cbd5e1; }
+.newsroom-editor .tiptap:empty::before { content: "தமிழில் முழுச் செய்தியை இங்கே எழுதுங்கள்…"; color: #94a3b8; pointer-events: none; }
+.article-content > * + * { margin-top: 1rem; }
+.article-content p { line-height: 1.9; }
+.article-content strong { font-weight: 800; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
