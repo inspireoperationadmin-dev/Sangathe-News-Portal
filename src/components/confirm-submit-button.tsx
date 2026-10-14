@@ -1,8 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { AlertTriangle, LogOut, X } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { createPortal, useFormStatus } from "react-dom";
+import {
+  AlertTriangle,
+  ArrowRight,
+  LoaderCircle,
+  LogOut,
+  Trash2,
+  X,
+} from "lucide-react";
 
 export function ConfirmSubmitButton({
   children,
@@ -15,7 +29,7 @@ export function ConfirmSubmitButton({
   confirmLabel,
   kind = "delete",
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   className: string;
   disabled?: boolean;
   ariaLabel?: string;
@@ -26,53 +40,375 @@ export function ConfirmSubmitButton({
   kind?: "delete" | "signout";
 }) {
   const [open, setOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const { pending } = useFormStatus();
+
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const submitRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const confirmingRef = useRef(false);
+
   const titleId = useId();
   const descriptionId = useId();
+  const isDelete = kind === "delete";
 
   const close = useCallback(() => {
-    if (submitting) return;
     setOpen(false);
-    window.setTimeout(() => triggerRef.current?.focus(), 0);
-  }, [submitting]);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
-    cancelRef.current?.focus();
+
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape" && !submitting) close(); };
-    window.addEventListener("keydown", closeOnEscape);
+    cancelRef.current?.focus();
+
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close();
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+
+      const elements =
+        dialogRef.current?.querySelectorAll<HTMLButtonElement>(
+          "button:not([disabled])",
+        );
+
+      if (!elements?.length) return;
+
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      const current = document.activeElement;
+      const outside = !dialogRef.current?.contains(current);
+
+      if (event.shiftKey && (current === first || outside)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (current === last || outside)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    const keepFocusInside = (event: FocusEvent) => {
+      if (
+        event.target instanceof Node &&
+        !dialogRef.current?.contains(event.target)
+      ) {
+        cancelRef.current?.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKey);
+    document.addEventListener("focusin", keepFocusInside);
+
     return () => {
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("keydown", handleKey);
+      document.removeEventListener("focusin", keepFocusInside);
+
+      if (!triggerRef.current?.disabled) {
+        triggerRef.current?.focus();
+      }
     };
-  }, [open, submitting, close]);
+  }, [open, close]);
 
   const confirm = () => {
+    if (pending || disabled || confirmingRef.current) return;
+
     const form = triggerRef.current?.form;
-    if (!form) { setOpen(false); return; }
-    setSubmitting(true);
-    form.requestSubmit();
+    const submitter = submitRef.current;
+
+    if (!form || !submitter) {
+      close();
+      return;
+    }
+
+    // Close first so native validation can focus an invalid form field.
+    close();
+
+    if (!form.reportValidity()) return;
+
+    confirmingRef.current = true;
+
+    try {
+      form.requestSubmit(submitter);
+    } finally {
+      queueMicrotask(() => {
+        confirmingRef.current = false;
+      });
+    }
   };
 
-  return <>
-    <button ref={triggerRef} type="button" disabled={disabled} aria-label={ariaLabel} title={title} onClick={() => setOpen(true)} className={className}>{children}</button>
-    {open && createPortal(<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget) close(); }}>
-      <section role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl md:p-6">
-        <div className="flex items-start justify-between gap-4">
-          <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${kind === "delete" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>{kind === "delete" ? <AlertTriangle className="h-6 w-6"/> : <LogOut className="h-6 w-6"/>}</span>
-          <button type="button" onClick={close} disabled={submitting} aria-label="Close confirmation" className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-50"><X className="h-5 w-5"/></button>
-        </div>
-        <h2 id={titleId} className="mt-4 text-xl font-black text-slate-950">{dialogTitle}</h2>
-        <p id={descriptionId} className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
-        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <button ref={cancelRef} type="button" onClick={close} disabled={submitting} className="min-h-11 cursor-pointer rounded-lg border border-slate-300 bg-white px-5 font-bold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-600 disabled:cursor-not-allowed disabled:opacity-50">Cancel</button>
-          <button type="button" onClick={confirm} disabled={submitting} className={`min-h-11 cursor-pointer rounded-lg px-5 font-bold text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-wait disabled:opacity-70 ${kind === "delete" ? "bg-red-700 hover:bg-red-800 focus-visible:outline-red-700" : "bg-slate-950 hover:bg-slate-800 focus-visible:outline-slate-950"}`}>{submitting ? "Please wait…" : confirmLabel}</button>
-        </div>
-      </section>
-    </div>, document.body)}
-  </>;
+  return (
+    <>
+      <style>{`
+        .sng-confirm-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 120;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+          background: rgba(15,23,42,.6);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+        }
+
+        .sng-confirm-dialog {
+          position: relative;
+          width: 100%;
+          max-width: 440px;
+          max-height: calc(100dvh - 40px);
+          overflow-y: auto;
+          border: 1px solid rgba(255,255,255,.75);
+          border-radius: 24px;
+          background: rgba(255,255,255,.98);
+          padding: 28px;
+          box-shadow:
+            0 25px 80px -25px rgba(15,23,42,.5),
+            inset 0 1px 0 white;
+          animation: sng-confirm-enter .22s ease both;
+        }
+
+        .sng-confirm-dialog .sng-confirm-icon {
+          display: flex;
+          width: 58px;
+          height: 58px;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid #fecdd3;
+          border-radius: 19px;
+          background: linear-gradient(145deg, white, #fff1f2);
+          color: #e11d48;
+          box-shadow:
+            4px 4px 10px rgba(148,163,184,.12),
+            -2px -2px 6px white;
+        }
+
+        .sng-confirm-dialog.is-signout .sng-confirm-icon {
+          border-color: #bfdbfe;
+          background: linear-gradient(145deg, white, #eff6ff);
+          color: #2563eb;
+        }
+
+        .sng-confirm-close {
+          display: flex;
+          width: 40px;
+          height: 40px;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          background: white;
+          color: #64748b;
+          cursor: pointer;
+          transition: background .2s ease, color .2s ease;
+        }
+
+        .sng-confirm-action {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          min-height: 46px;
+          padding: 12px 18px;
+          border: 1px solid #dbe3ee;
+          border-radius: 12px;
+          background: linear-gradient(145deg, white, #f8fafc);
+          color: #475569;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          box-shadow: inset 0 1px 0 white;
+          transition: transform .18s ease, box-shadow .18s ease;
+        }
+
+        .sng-confirm-action.is-danger {
+          border-color: #e11d48;
+          background: linear-gradient(135deg, #f43f5e, #e11d48);
+          color: white;
+          box-shadow: 0 6px 16px -10px rgba(225,29,72,.6);
+        }
+
+        .sng-confirm-action.is-signout {
+          border-color: #2563eb;
+          background: linear-gradient(135deg, #3b82f6, #2563eb);
+          color: white;
+          box-shadow: 0 6px 16px -10px rgba(37,99,235,.6);
+        }
+
+        .sng-confirm-dialog button:focus-visible {
+          outline: 3px solid #60a5fa;
+          outline-offset: 3px;
+        }
+
+        .sng-confirm-loading {
+          animation: sng-confirm-spin .85s linear infinite;
+        }
+
+        @media (hover: hover) {
+          .sng-confirm-close:hover {
+            background: #f1f5f9;
+            color: #0f172a;
+          }
+
+          .sng-confirm-action:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 18px -12px rgba(15,23,42,.4);
+          }
+        }
+
+        @media (max-width: 480px) {
+          .sng-confirm-dialog { padding: 22px; }
+        }
+
+        @keyframes sng-confirm-enter {
+          from { opacity: 0; transform: translateY(8px) scale(.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes sng-confirm-spin {
+          to { transform: rotate(360deg); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .sng-confirm-overlay *,
+          .sng-confirm-loading {
+            animation: none !important;
+            transition: none !important;
+          }
+        }
+      `}</style>
+
+      <button
+        ref={triggerRef}
+        type="button"
+        disabled={disabled || pending}
+        aria-label={pending ? "Processing…" : ariaLabel}
+        aria-busy={pending || undefined}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title={title}
+        onClick={() => setOpen(true)}
+        className={className}
+      >
+        {pending ? (
+          <>
+            <LoaderCircle
+              className="sng-confirm-loading h-4 w-4 shrink-0"
+              aria-hidden="true"
+            />
+            <span className="sr-only">Processing…</span>
+          </>
+        ) : (
+          children
+        )}
+      </button>
+
+      {/* A real submitter keeps the existing form action intact. */}
+      <button
+        ref={submitRef}
+        type="submit"
+        hidden
+        disabled={disabled || pending}
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+
+      {open &&
+        createPortal(
+          <div
+            className="sng-confirm-overlay"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) close();
+            }}
+          >
+            <section
+              ref={dialogRef}
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby={titleId}
+              aria-describedby={descriptionId}
+              className={`sng-confirm-dialog ${
+                isDelete ? "" : "is-signout"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <span className="sng-confirm-icon" aria-hidden="true">
+                  {isDelete ? (
+                    <AlertTriangle className="h-6 w-6" />
+                  ) : (
+                    <LogOut className="h-6 w-6" />
+                  )}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={close}
+                  aria-label="Close confirmation"
+                  className="sng-confirm-close"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+
+              <p
+                className={`mt-6 text-[10px] font-bold uppercase tracking-[0.2em] ${
+                  isDelete ? "text-rose-600" : "text-blue-600"
+                }`}
+              >
+                {isDelete ? "Confirm deletion" : "Account session"}
+              </p>
+
+              <h2
+                id={titleId}
+                className="mt-2 text-xl font-bold leading-8 tracking-tight text-slate-900"
+              >
+                {dialogTitle}
+              </h2>
+
+              <p
+                id={descriptionId}
+                className="mt-3 break-words text-sm leading-7 text-slate-500"
+              >
+                {description}
+              </p>
+
+              <div className="mt-7 flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
+                <button
+                  ref={cancelRef}
+                  type="button"
+                  onClick={close}
+                  className="sng-confirm-action"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={confirm}
+                  disabled={disabled || pending}
+                  className={`sng-confirm-action ${
+                    isDelete ? "is-danger" : "is-signout"
+                  }`}
+                >
+                  {isDelete ? (
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  {confirmLabel}
+                </button>
+              </div>
+            </section>
+          </div>,
+          document.body,
+        )}
+    </>
+  );
 }
