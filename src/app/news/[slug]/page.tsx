@@ -8,6 +8,7 @@ import { Clock, ArrowLeft, Newspaper } from "lucide-react";
 import { SiteFooter } from "@/components/site-footer";
 import { sanitizeArticleHtml } from "@/lib/article-content";
 import { Locale } from "@prisma/client";
+import { getRequestSiteUrl } from "@/lib/site-url";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -21,7 +22,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return { title: "செய்தி கிடைக்கவில்லை | சங்கதி" };
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const siteUrl = await getRequestSiteUrl();
   const articleUrl = `${siteUrl}/news/${article.slug}`;
   const imageUrl = article.featuredImage ? new URL(article.featuredImage, siteUrl).toString() : `${siteUrl}/default-og.svg`;
 
@@ -61,7 +62,7 @@ export default async function SingleArticlePage({ params }: PageProps) {
   await recordArticleView(slug, Locale.ta);
   const relatedArticles = article.relatedFrom.length > 0 ? article.relatedFrom.map(item => item.relatedArticle) : await getRelatedArticles(article.categoryId, article.id, Locale.ta, 3);
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const siteUrl = await getRequestSiteUrl();
   const articleUrl = `${siteUrl}/news/${article.slug}`;
 
   // Google News Structured Data
