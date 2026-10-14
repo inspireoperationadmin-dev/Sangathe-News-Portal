@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sangathe-news-portal",
+  "main": "worker.ts",
+  "compatibility_date": "2025-12-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true },
+  "upload_source_maps": true,
+  // Replaces the Vercel cron in vercel.json: publishes scheduled articles every minute.
+  "triggers": { "crons": ["* * * * *"] }
+  // Secrets (DATABASE_URL, SESSION_SECRET, CRON_SECRET, R2_*, VAPID_PRIVATE_KEY, SEED_*) are set in the
+  // Cloudflare dashboard, never in this file. NEXT_PUBLIC_* values are Build variables.
+}

@@ -9,7 +9,6 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-export const revalidate = 60; // ஒவ்வொரு 60 விநாடிக்கும் பக்கம் புதுப்பிக்கப்படும்
 
 export default async function CategoryPage({ params }: PageProps) {
   const { slug } = await params;

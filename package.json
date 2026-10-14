@@ -8,13 +8,19 @@
     "start": "next start",
     "scheduler": "node --env-file=.env scripts/run-scheduler.mjs",
     "media:migrate-r2": "node --env-file=.env scripts/migrate-media-to-r2.mjs",
-    "lint": "eslint"
+    "lint": "eslint",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1146.0",
+    "@neondatabase/serverless": "^0.9.5",
+    "@opennextjs/cloudflare": "^1.20.11",
+    "@prisma/adapter-neon": "^5.22.0",
     "@prisma/client": "^5.22.0",
     "@tiptap/extension-image": "^3.31.4",
     "@tiptap/extension-text-align": "^3.31.4",
@@ -45,6 +51,7 @@
     "prisma": "5.22.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.151.0"
   }
 }

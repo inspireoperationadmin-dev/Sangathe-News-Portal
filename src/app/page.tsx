@@ -12,7 +12,6 @@ import { BreakingNews } from "@/components/breaking-news";
 import { PublicHeader } from "@/components/public-header";
 import { CategoryNav } from "@/components/category-nav";
 
-export const revalidate = 60;
 
 type HomePageProps = { searchParams: Promise<{ newsletter?: string }> };
 

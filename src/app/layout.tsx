@@ -13,6 +13,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Content comes from the database and is edited in the admin panel. Cloudflare Workers
+// has no ISR cache configured, so pages are rendered per request to avoid stale content.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: { default: "சங்கதி | Sangathe News", template: "%s | Sangathe" },
   description: "Sangathe digital news and professional newsroom platform.",
