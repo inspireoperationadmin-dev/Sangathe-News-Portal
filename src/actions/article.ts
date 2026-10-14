@@ -9,11 +9,21 @@ import { articleText, sanitizeArticleHtml } from "@/lib/article-content";
 import { sendPushNotification } from "@/lib/push";
 import { parseColomboDateTime } from "@/lib/datetime";
 import { deleteFromR2, deleteManyFromR2, uploadToR2 } from "@/lib/r2";
+import type { Prisma } from "@prisma/client";
 
 const EDITORS: Role[] = [Role.ADMIN, Role.EDITOR];
 const DESK: Role[] = [Role.ADMIN, Role.EDITOR, Role.SUB_EDITOR];
 const MAX_IMAGE_SIZE = 8 * 1024 * 1024;
 const IMAGE_TYPES: Record<string, string> = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif" };
+
+async function articleTransaction<T>(
+  work: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return prisma.$transaction(work, {
+    maxWait: 10_000,
+    timeout: 30_000,
+  });
+}
 
 export async function getCategories(locale: Locale = Locale.ta) {
   return prisma.category.findMany({ where: { locale }, orderBy: { order: "asc" } });
@@ -123,7 +133,7 @@ export async function createArticle(formData: FormData): Promise<void> {
   const now = new Date();
   let article: Article;
   try {
-    article = await prisma.$transaction(async (tx) => {
+    article = await articleTransaction(async (tx) => {
     const created = await tx.article.create({ data: {
       title, slug: slugFor(title), locale, summary: value(formData, "summary") || null, content,
       featuredImage: featuredImage.url, featuredImageKey: featuredImage.storageKey, imageCaption: value(formData, "imageCaption") || null,
@@ -141,10 +151,55 @@ export async function createArticle(formData: FormData): Promise<void> {
       tags: { create: tags.map(name => ({ tag: { connectOrCreate: { where: { slug_locale: { slug: tagSlug(name), locale: Locale.ta } }, create: { name, slug: tagSlug(name), locale: Locale.ta } } } })) },
       media: { create: gallery.map((media, order) => ({ order, media: { create: { ...media, type: "IMAGE" } } })) },
     }});
-    const validRelations = await tx.article.findMany({ where: { id: { in: relations }, locale: Locale.ta, status: { in: [ArticleStatus.PUBLISHED, ArticleStatus.UPDATED, ArticleStatus.CORRECTED] } }, select: { id: true } });
-    if (validRelations.length) await tx.articleRelation.createMany({ data: validRelations.map((related, order) => ({ articleId: created.id, relatedArticleId: related.id, order })) });
-    await tx.articleRevision.create({ data: { articleId: created.id, revisionNumber: 1, title, summary: created.summary, content, status, editorId: user.id, changeNote: "Initial version" } });
-    await tx.auditEvent.create({ data: { action: AuditAction.CREATED, actorId: user.id, articleId: created.id, details: `Created as ${status}` } });
+        const validRelations = relations.length
+      ? await tx.article.findMany({
+          where: {
+            id: { in: relations },
+            locale: Locale.ta,
+            status: {
+              in: [
+                ArticleStatus.PUBLISHED,
+                ArticleStatus.UPDATED,
+                ArticleStatus.CORRECTED,
+              ],
+            },
+          },
+          select: { id: true },
+        })
+      : [];
+
+    if (validRelations.length > 0) {
+      await tx.articleRelation.createMany({
+        data: validRelations.map((related, order) => ({
+          articleId: created.id,
+          relatedArticleId: related.id,
+          order,
+        })),
+      });
+    }
+
+    await tx.articleRevision.create({
+      data: {
+        articleId: created.id,
+        revisionNumber: 1,
+        title,
+        summary: created.summary,
+        content,
+        status,
+        editorId: user.id,
+        changeNote: "Initial version",
+      },
+    });
+
+    await tx.auditEvent.create({
+      data: {
+        action: AuditAction.CREATED,
+        actorId: user.id,
+        articleId: created.id,
+        details: `Created as ${status}`,
+      },
+    });
+
     return created;
     });
   } catch (error) {
@@ -196,7 +251,7 @@ export async function updateArticle(articleId: string, formData: FormData): Prom
   const revisionNumber = await prisma.articleRevision.count({ where: { articleId } }) + 1;
   const now = new Date();
   try {
-    await prisma.$transaction(async (tx) => {
+    await articleTransaction(async (tx) => {
     await tx.articleRevision.create({ data: { articleId, revisionNumber, title, summary: value(formData, "summary") || null, content, status, editorId: user.id, changeNote } });
     await tx.article.update({ where: { id: articleId }, data: {
       title, content, categoryId, locale: Locale.ta, summary: value(formData, "summary") || null,
