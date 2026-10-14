@@ -29,6 +29,12 @@ function usesNeon(url: string | undefined) {
 function createClient() {
   const url = process.env.DATABASE_URL;
   const log: ("error" | "warn")[] = process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"];
+  if (isWorkers && !url) {
+    throw new Error("DATABASE_URL is not configured in the Cloudflare Worker runtime variables.");
+  }
+  if (isWorkers && !usesNeon(url)) {
+    throw new Error("Cloudflare deployment requires a valid Neon DATABASE_URL ending in .neon.tech.");
+  }
   if (usesNeon(url)) {
     const pool = new Pool({ connectionString: url });
     return new PrismaClientImpl({ adapter: new PrismaNeon(pool), log });
